@@ -150,6 +150,19 @@ class MongoIncidentRepository implements IIncidentsRepository {
 		return this.toEntity(updatedIncident);
 	};
 
+	claimEscalation = async (incidentId: string, teamId: string): Promise<boolean> => {
+		const result = await IncidentModel.findOneAndUpdate(
+			{
+				_id: new mongoose.Types.ObjectId(incidentId),
+				teamId: new mongoose.Types.ObjectId(teamId),
+				escalationSentAt: null,
+			},
+			{ $set: { escalationSentAt: new Date() } },
+			{ new: true }
+		);
+		return result !== null;
+	};
+
 	countByTeamId = async (
 		teamId: string,
 		startDate: Date | undefined,

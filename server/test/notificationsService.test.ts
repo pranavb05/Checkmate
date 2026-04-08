@@ -69,6 +69,7 @@ const createStatus = (): MonitorStatusResponse => ({
 describe("NotificationsService.handleEscalationNotifications", () => {
 	let notificationsRepository: { findNotificationsByIds: jest.Mock<any> };
 	let emailProvider: { sendMessage: jest.Mock<any> };
+	let buildMessageMock: jest.Mock<any>;
 	let service: NotificationsService;
 
 	beforeEach(() => {
@@ -79,6 +80,21 @@ describe("NotificationsService.handleEscalationNotifications", () => {
 		emailProvider = {
 			sendMessage: jest.fn(() => Promise.resolve(true)),
 		};
+
+		buildMessageMock = jest.fn(() => ({
+			type: "escalation",
+			severity: "critical",
+			monitor: {
+				id: "monitor-1",
+				name: "API",
+				url: "https://example.com",
+				type: "http",
+				status: "down",
+			},
+			content: { title: "Escalation: API still down", summary: "Still down", details: [], timestamp: new Date() },
+			clientHost: "https://app.example.com",
+			metadata: { teamId: "team-1", notificationReason: "escalation" },
+		}));
 
 		service = new NotificationsService(
 			notificationsRepository as any,
@@ -92,22 +108,7 @@ describe("NotificationsService.handleEscalationNotifications", () => {
 			{} as any,
 			{ getSettings: () => ({ clientHost: "https://app.example.com" }) } as any,
 			createLogger() as any,
-			{
-				buildMessage: jest.fn(() => ({
-					type: "monitor_down",
-					severity: "critical",
-					monitor: {
-						id: "monitor-1",
-						name: "API",
-						url: "https://example.com",
-						type: "http",
-						status: "down",
-					},
-					content: { title: "Down", summary: "Down", details: [], timestamp: new Date() },
-					clientHost: "https://app.example.com",
-					metadata: { teamId: "team-1", notificationReason: "status_change" },
-				})),
-			} as any
+			{ buildMessage: buildMessageMock } as any
 		);
 	});
 
@@ -125,6 +126,21 @@ describe("NotificationsService.handleEscalationNotifications", () => {
 		expect(emailProvider.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "notification-1", type: "email" }), expect.any(Object));
 	});
 
+	it("passes escalation notificationReason to message builder", async () => {
+		notificationsRepository.findNotificationsByIds.mockResolvedValue([
+			createNotification({ id: "notification-1", type: "email" }),
+		]);
+
+		await service.handleEscalationNotifications(createMonitor(), createStatus());
+
+		expect(buildMessageMock).toHaveBeenCalledWith(
+			expect.any(Object),
+			expect.any(Object),
+			expect.objectContaining({ notificationReason: "escalation" }),
+			expect.any(String)
+		);
+	});
+
 	it("returns false when no email channels are configured", async () => {
 		notificationsRepository.findNotificationsByIds.mockResolvedValue([
 			createNotification({ id: "notification-2", type: "slack", notificationName: "Slack Channel" }),
@@ -133,5 +149,14 @@ describe("NotificationsService.handleEscalationNotifications", () => {
 		const sent = await service.handleEscalationNotifications(createMonitor(), createStatus());
 		expect(sent).toBe(false);
 		expect(emailProvider.sendMessage).not.toHaveBeenCalled();
+	});
+
+	it("returns false when escalationNotifications is empty", async () => {
+		const monitor = createMonitor();
+		monitor.escalationNotifications = [];
+
+		const sent = await service.handleEscalationNotifications(monitor, createStatus());
+		expect(sent).toBe(false);
+		expect(notificationsRepository.findNotificationsByIds).not.toHaveBeenCalled();
 	});
 });

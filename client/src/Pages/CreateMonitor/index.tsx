@@ -213,7 +213,6 @@ const CreateMonitorPage = () => {
 	const watchedUseAdvancedMatching = watch("useAdvancedMatching") as boolean;
 	const watchGeoCheckEnabled = watch("geoCheckEnabled") as boolean;
 	const watchedNotifications = watch("notifications") as string[];
-	const watchedEscalationNotifications = watch("escalationNotifications") as string[];
 	const escalationSectionDisabled = (watchedNotifications ?? []).length === 0;
 
 	useEffect(() => {

@@ -11,15 +11,26 @@ export async function addEscalationDefaults(): Promise<void> {
 			{
 				$or: [{ escalationAfterMinutes: { $exists: false } }, { escalationNotifications: { $exists: false } }],
 			},
-			{
-				$set: {
-					escalationAfterMinutes: null,
-					escalationNotifications: [],
+			[
+				{
+					$set: {
+						escalationAfterMinutes: { $ifNull: ["$escalationAfterMinutes", null] },
+						escalationNotifications: { $ifNull: ["$escalationNotifications", []] },
+					},
 				},
-			}
+			]
 		);
 
-		const incidentsResult = await IncidentModel.updateMany({ escalationSentAt: { $exists: false } }, { $set: { escalationSentAt: null } });
+		const incidentsResult = await IncidentModel.updateMany(
+			{ escalationSentAt: { $exists: false } },
+			[
+				{
+					$set: {
+						escalationSentAt: { $ifNull: ["$escalationSentAt", null] },
+					},
+				},
+			]
+		);
 
 		logger.info({
 			service: SERVICE_NAME,

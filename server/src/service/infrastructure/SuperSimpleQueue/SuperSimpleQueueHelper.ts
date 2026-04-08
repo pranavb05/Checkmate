@@ -491,10 +491,11 @@ export class SuperSimpleQueueHelper implements ISuperSimpleQueueHelper {
 			return;
 		}
 
-		const sent = await this.notificationsService.handleEscalationNotifications(monitor, status);
-		if (!sent) {
+		// Atomically claim escalation to prevent duplicate sends across concurrent polls
+		const claimed = await this.incidentsRepository.claimEscalation(activeIncident.id, activeIncident.teamId);
+		if (!claimed) {
 			this.logger.debug({
-				message: `Escalation eligible but no escalation notification was sent for monitor ${monitor.id}`,
+				message: `Escalation skipped for monitor ${monitor.id}: claim failed (already claimed by another poll)`,
 				service: SERVICE_NAME,
 				method: "handleEscalationIfEligible",
 				details: { incidentId: activeIncident.id },
@@ -502,9 +503,16 @@ export class SuperSimpleQueueHelper implements ISuperSimpleQueueHelper {
 			return;
 		}
 
-		await this.incidentsRepository.updateById(activeIncident.id, activeIncident.teamId, {
-			escalationSentAt: new Date().toISOString(),
-		});
+		const sent = await this.notificationsService.handleEscalationNotifications(monitor, status);
+		if (!sent) {
+			this.logger.debug({
+				message: `Escalation claimed but no email was sent for monitor ${monitor.id}`,
+				service: SERVICE_NAME,
+				method: "handleEscalationIfEligible",
+				details: { incidentId: activeIncident.id },
+			});
+			return;
+		}
 
 		this.logger.info({
 			message: `Escalation notification sent for monitor ${monitor.id}`,
